@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'note_item.dart';
 
 main() => runApp(MyApp());
 
@@ -9,69 +13,91 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   List<String> _notes = [];
-
+  List<String> _dates = [];
+  String _theme = 'light';
   TextEditingController _controller = TextEditingController();
+
+  _getData()async{
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _notes = prefs.getStringList('notes')??[];
+      _dates = prefs.getStringList('dates')??[];
+    });
+
+  }
+
+  _saveData()async{
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setStringList('notes', _notes);
+    prefs.setStringList('dates', _dates);
+  }
+
+  _getTheme()async{
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _theme = prefs.getString('theme')??'light';
+    });
+  }
+
+  _setTheme()async{
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString('theme', _theme);
+  }
+
+  @override
+  void initState() {
+    _getData();
+    _getTheme();
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      theme: _theme == 'light'? ThemeData.light():ThemeData.dark(),
+      debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(
           title: Text('Flutter BootCamp'),
+          leading: IconButton(
+            onPressed: _themeChange,
+            icon: Icon(_theme == 'light'?Icons.wb_sunny:Icons.lightbulb_outline, color: Colors.white,),
+          ),
         ),
-        body: Column(
-          children: <Widget>[
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2),
-                itemBuilder: (BuildContext context, int idx) {
-                  // 0 1
-                  return InkWell(
-                    onLongPress: () async {
-                      if (await _check(context) == true) {
-                        setState(() {
-                          _notes.removeAt(idx);
-                        });
-                      }
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.all(10.0),
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(15.0)),
-                      child: Text(
-                        _notes[idx],
-                        style: TextStyle(fontSize: 18),
-                      ),
-                    ),
-                  );
-                },
-                itemCount: _notes.length,
+        body: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            children: <Widget>[
+              Expanded(
+                child: _notes.isEmpty?
+                    Center(child: Text('Nothing to show yet!', style: TextStyle(fontWeight: FontWeight.bold),))
+                    :GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2),
+                  itemBuilder: (BuildContext context, int idx) {
+                    return InkWell(
+                      onLongPress: () => _deleteNote(idx, context),
+                      child: NoteItem(note: _notes[idx], date: _dates[idx],),
+                    );
+                  },
+                  itemCount: _notes.length,
+                ),
               ),
-            ),
-            TextField(
-              controller: _controller,
-              decoration: InputDecoration(
-                hintText: 'Enter a note ...',
-                  border: OutlineInputBorder(),
+              TextField(
+                onSubmitted: (_) => _addNote(),
+                controller: _controller,
+                decoration: InputDecoration(
+                  hintText: 'Enter a note ...',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(18.0)),
+                ),
               ),
-            ),
-            RaisedButton(
-              onPressed: () {
-                if (_controller.text.isNotEmpty) {
-                  setState(() {
-                    _notes.add(_controller.text);
-                    _controller.clear();
-                  });
-
-                  print(_notes.toString());
-                }
-              },
-              child: Text('Add note'),
-            )
-          ],
+              RaisedButton(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)),
+                onPressed: _addNote,
+                child: Text('Add note'),
+              )
+            ],
+          ),
         ),
       ),
     );
@@ -98,4 +124,38 @@ class _MyAppState extends State<MyApp> {
           ],
         ));
   }
+
+  _addNote(){
+    if (_controller.text.isNotEmpty) {
+      setState(() {
+        _notes.add(_controller.text);
+        _dates.add(DateFormat('dd MMM hh:mm a').format(DateTime.now()));
+        _controller.clear();
+        _saveData();
+      });
+    }
+  }
+
+  _deleteNote(int idx, BuildContext context)async{
+    if (await _check(context) == true) {
+      setState(() {
+        _notes.removeAt(idx);
+        _dates.removeAt(idx);
+        _saveData();
+      });
+    }
+  }
+
+  _themeChange(){
+    setState(() {
+      if(_theme == 'light'){
+        _theme = 'dark';
+      }
+      else{
+        _theme = 'light';
+      }
+      _setTheme();
+    });
+  }
+
 }
